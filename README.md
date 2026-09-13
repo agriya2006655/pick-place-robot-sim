@@ -1,3 +1,4 @@
+🔗 Live demo: https://agriya2006655.github.io/pick-place-robot-sim/showcase/
 # 6-Axis Robotic Pick-and-Place Simulation & Cycle Time Optimization
 
 A two-part project:
