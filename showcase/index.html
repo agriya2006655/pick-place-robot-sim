@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>6-Axis Robotic Pick-and-Place — Cycle-Time Optimization</title>
+<style>
+  :root{
+    --bg: #120e0e;
+    --bg-raised: #1c1515;
+    --line: #3a2626;
+    --text: #f5ece5;
+    --text-dim: #b09d95;
+    --accent: #e6412c;
+    --accent-glow: #ff5a3d;
+    --accent-dim: #7a2318;
+    --mono: 'JetBrains Mono', 'Courier New', monospace;
+    --serif: Georgia, 'Times New Roman', serif;
+    --sans: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  }
+
+  *{ box-sizing: border-box; margin:0; padding:0; }
+  html{ scroll-behavior: smooth; }
+
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -5%, rgba(230,65,44,0.14), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 10%, rgba(230,65,44,0.08), transparent 55%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 64px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 64px),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  ::selection{ background: var(--accent); color: var(--bg); }
+
+  a{ color: inherit; }
+
+  .wrap{
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 28px;
+  }
+
+  section{ padding: 110px 0; border-bottom: 1px solid var(--line); }
+  section:last-of-type{ border-bottom: none; }
+
+  h1,h2,h3{ font-family: var(--serif); font-weight: 400; letter-spacing: -0.01em; }
+
+  /* ---------- HERO ---------- */
+  .hero{
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 60px 0;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+  }
+
+  .hero .kicker{
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent-glow);
+    margin-bottom: 22px;
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .hero .kicker::before{
+    content: '';
+    width: 7px; height: 7px;
+    background: var(--accent-glow);
+    border-radius: 50%;
+    box-shadow: 0 0 12px 2px var(--accent-glow);
+  }
+
+  .hero h1{
+    font-size: clamp(38px, 6vw, 64px);
+    line-height: 1.06;
+    max-width: 760px;
+    background: linear-gradient(180deg, var(--text) 60%, #d8c8bf 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero p.lede{
+    margin-top: 22px;
+    max-width: 560px;
+    color: var(--text-dim);
+    font-size: 17px;
+  }
+
+  .hero-grid{
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 56px;
+    align-items: center;
+    margin-top: 56px;
+  }
+
+  @media (max-width: 800px){
+    .hero-grid{ grid-template-columns: 1fr; }
+  }
+
+  .gif-frame{
+    border: 1px solid var(--line);
+    background: var(--bg-raised);
+    padding: 10px;
+    border-radius: 6px;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.6), 0 0 0 1px rgba(230,65,44,0.06);
+    position: relative;
+  }
+  .gif-frame::before{
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 6px;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(230,65,44,0.35), transparent 40%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  .gif-frame img{
+    width: 100%;
+    display: block;
+    border-radius: 1px;
+  }
+  .gif-frame .caption{
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    padding: 10px 4px 2px;
+  }
+
+  .result-block{ display: flex; flex-direction: column; gap: 10px; }
+
+  .result-row{
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .result-row:last-child{ border-bottom: none; }
+
+  .result-label{
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    width: 70px;
+    flex-shrink: 0;
+  }
+
+  .result-num{
+    font-family: var(--serif);
+    font-size: 44px;
+    color: var(--text);
+  }
+  .result-num.after{
+    color: var(--accent-glow);
+    text-shadow: 0 0 30px rgba(255,90,61,0.35);
+  }
+
+  .reduction-line{
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 15px;
+    color: var(--accent-glow);
+    background: rgba(230,65,44,0.08);
+    border: 1px solid rgba(230,65,44,0.25);
+    border-radius: 4px;
+    padding: 10px 14px;
+    display: inline-block;
+  }
+  .reduction-line .num{ font-size: 22px; }
+
+  .cta-row{ margin-top: 44px; display: flex; gap: 16px; flex-wrap: wrap; }
+
+  .btn{
+    display: inline-block;
+    padding: 13px 26px;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: var(--accent-glow);
+    text-decoration: none;
+    font-size: 14px;
+    font-family: var(--sans);
+    letter-spacing: 0.01em;
+    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .btn:hover{
+    background: var(--accent);
+    color: #120e0e;
+    box-shadow: 0 0 24px rgba(230,65,44,0.35);
+  }
+
+  .btn.ghost{
+    border-color: var(--line);
+    color: var(--text-dim);
+    border-radius: 4px;
+  }
+  .btn.ghost:hover{ background: var(--bg-raised); color: var(--text); border-color: var(--text-dim); }
+
+  /* ---------- SECTION LABELS ---------- */
+  .section-num{
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 18px;
+  }
+
+  h2.section-title{
+    font-size: clamp(26px, 3.4vw, 34px);
+    max-width: 640px;
+    margin-bottom: 20px;
+  }
+
+  .section-body{ max-width: 620px; color: var(--text-dim); font-size: 16px; }
+  .section-body p + p{ margin-top: 14px; }
+
+  /* ---------- FLOW DIAGRAM ---------- */
+  .flow{
+    margin-top: 56px;
+    display: flex;
+    flex-direction: column;
+  }
+  .flow-step{
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 20px 0;
+  }
+  .flow-step .dot{
+    width: 9px; height: 9px;
+    background: var(--accent-glow);
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 10px 1px rgba(255,90,61,0.5);
+  }
+  .flow-step .label{ font-family: var(--mono); font-size: 15px; }
+  .flow-connector{
+    width: 1px;
+    height: 26px;
+    background: var(--line);
+    margin-left: 3px;
+  }
+
+  /* ---------- OPTIMIZATION ---------- */
+  .opt-grid{
+    margin-top: 48px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  @media (max-width: 700px){ .opt-grid{ grid-template-columns: 1fr; } }
+
+  .opt-card{
+    background: var(--bg-raised);
+    padding: 32px;
+    transition: background 0.2s ease;
+  }
+  .opt-card:hover{ background: #221818; }
+  .opt-card .arrow{
+    font-family: var(--mono);
+    color: var(--accent-glow);
+    font-size: 22px;
+    display: inline-block;
+    width: 36px; height: 36px;
+    line-height: 36px;
+    text-align: center;
+    background: rgba(230,65,44,0.1);
+    border-radius: 50%;
+  }
+  .opt-card h3{ font-family: var(--sans); font-size: 16px; margin: 10px 0 8px; font-weight: 600; }
+  .opt-card p{ color: var(--text-dim); font-size: 14px; }
+
+  .cycle-summary{
+    margin-top: 40px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-family: var(--mono);
+    flex-wrap: wrap;
+  }
+  .cycle-summary .step{ font-size: 15px; color: var(--text-dim); }
+  .cycle-summary .step.strong{ color: var(--text); font-size: 15px; }
+  .cycle-summary .arrow{ color: var(--accent); }
+
+  /* ---------- RESULTS TABLE ---------- */
+  table.results{
+    margin-top: 44px;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+  }
+  table.results th, table.results td{
+    text-align: left;
+    padding: 14px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  table.results th{
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+  table.results td.num{ font-family: var(--mono); }
+  table.results tr.highlight td{
+    color: var(--accent-glow);
+    background: rgba(230,65,44,0.06);
+  }
+
+  .result-image{
+    margin-top: 44px;
+    border: 1px solid var(--line);
+    background: var(--bg-raised);
+    padding: 10px;
+    border-radius: 6px;
+    box-shadow: 0 20px 50px -25px rgba(0,0,0,0.6);
+  }
+  .result-image img{ width: 100%; display: block; }
+  .result-image .caption{ font-family: var(--mono); font-size: 11px; color: var(--text-dim); padding: 10px 4px 0; }
+
+  /* ---------- TECH DETAILS ---------- */
+  .term-list{ margin-top: 44px; display: flex; flex-direction: column; }
+  .term{
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 24px;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  @media (max-width: 700px){ .term{ grid-template-columns: 1fr; gap: 6px; } }
+  .term{ position: relative; padding-left: 16px; }
+  .term::before{
+    content: '';
+    position: absolute;
+    left: 0; top: 22px; bottom: 22px;
+    width: 2px;
+    background: linear-gradient(180deg, var(--accent-glow), transparent);
+    opacity: 0.5;
+  }
+  .term .term-name{ font-family: var(--mono); font-size: 14px; color: var(--accent-glow); }
+  .term .term-def{ font-size: 15px; color: var(--text-dim); }
+
+  /* ---------- SOURCE / FOOTER ---------- */
+  .source-section{ text-align: left; }
+  .source-section .btn{ margin-top: 28px; font-size: 15px; padding: 16px 34px; }
+
+  footer{
+    padding: 40px 0 60px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- ===================== HERO ===================== -->
+  <section class="hero">
+    <div class="kicker">MECHANICAL ENGINEERING · ROBOTICS SIMULATION</div>
+    <h1>6-Axis Industrial Robot<br>Motion Analysis &amp; Cycle-Time Optimization</h1>
+    <p class="lede">A DH-parameter forward-kinematics simulation of a pick-and-place cycle, used to test whether the same operation can run faster without unsafe motion.</p>
+
+    <div class="hero-grid">
+      <div class="gif-frame">
+        <img src="assets/pick_and_place.gif" alt="Simulated 6-axis robot performing a pick-and-place cycle">
+        <div class="caption">Simulated run — Home → Pick → Place → Home</div>
+      </div>
+
+      <div class="result-block">
+        <div class="result-row">
+          <span class="result-label">BEFORE</span>
+          <span class="result-num">2.67 s</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">AFTER</span>
+          <span class="result-num after">1.96 s</span>
+        </div>
+        <div class="reduction-line"><span class="num">−26.7%</span> cycle-time reduction</div>
+
+        <div class="cta-row">
+          <a href="#optimization" class="btn">Explore the Optimization</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== PROBLEM ===================== -->
+  <section id="problem">
+    <div class="section-num">01 — The Engineering Problem</div>
+    <h2 class="section-title">Can the same pick-and-place operation run faster?</h2>
+    <div class="section-body">
+      <p>Industrial robots repeat one motion thousands of times a day, so even small timing gains compound fast. The question here was narrow and testable: can this specific pick-and-place cycle be shortened by changing motion parameters and gripper timing — without moving the pick or place positions, and without unsafe joint speeds.</p>
+    </div>
+  </section>
+
+  <!-- ===================== HOW IT WORKS ===================== -->
+  <section id="how">
+    <div class="section-num">02 — How It Works</div>
+    <h2 class="section-title">From joint angles to a timed cycle</h2>
+    <div class="section-body">
+      <p>The simulation has no computer vision, no machine learning, and no inverse kinematics — every pose is a chosen set of joint angles, and the arm's position is computed forward from there.</p>
+    </div>
+
+    <div class="flow">
+      <div class="flow-step"><span class="dot"></span><span class="label">DH Parameters</span></div>
+      <div class="flow-connector"></div>
+      <div class="flow-step"><span class="dot"></span><span class="label">Forward Kinematics</span></div>
+      <div class="flow-connector"></div>
+      <div class="flow-step"><span class="dot"></span><span class="label">6-Axis Robot Simulation</span></div>
+      <div class="flow-connector"></div>
+      <div class="flow-step"><span class="dot"></span><span class="label">Motion &amp; Cycle-Time Analysis</span></div>
+      <div class="flow-connector"></div>
+      <div class="flow-step"><span class="dot"></span><span class="label">Optimization</span></div>
+    </div>
+  </section>
+
+  <!-- ===================== OPTIMIZATION ===================== -->
+  <section id="optimization">
+    <div class="section-num">03 — Optimization</div>
+    <h2 class="section-title">Two changes, tested independently</h2>
+    <div class="section-body">
+      <p>All six joints move simultaneously during a real move — so each segment's time is set by whichever joint has the furthest angle to travel relative to its own speed limit. Two changes were tested against that model:</p>
+    </div>
+
+    <div class="opt-grid">
+      <div class="opt-card">
+        <span class="arrow">↑</span>
+        <h3>Joint angular speed</h3>
+        <p>Speed limits raised 20% across all six joints, simulating faster servo tuning.</p>
+      </div>
+      <div class="opt-card">
+        <span class="arrow">↓</span>
+        <h3>Gripper operation time</h3>
+        <p>Gripper actuation cut from 4 s to 2 s, simulating a faster pneumatic valve.</p>
+      </div>
+    </div>
+
+    <div class="cycle-summary">
+      <span class="step strong">2.67 s</span>
+      <span class="arrow">→</span>
+      <span class="step">2.36 s (speed only)</span>
+      <span class="arrow">→</span>
+      <span class="step strong" style="color:var(--accent)">1.96 s</span>
+    </div>
+  </section>
+
+  <!-- ===================== RESULTS ===================== -->
+  <section id="results">
+    <div class="section-num">04 — Results</div>
+    <h2 class="section-title">Three scenarios, compared directly</h2>
+
+    <table class="results">
+      <tr><th>Scenario</th><th>Change</th><th>Cycle time</th><th>vs Baseline</th></tr>
+      <tr><td>Baseline</td><td class="num">Conservative joint speeds, 0.4s gripper</td><td class="num">2.67 s</td><td class="num">—</td></tr>
+      <tr><td>Optimized 1</td><td class="num">Joint speed +20%</td><td class="num">2.36 s</td><td class="num">−11.7%</td></tr>
+      <tr class="highlight"><td>Optimized 2</td><td class="num">+ faster 0.2s gripper</td><td class="num">1.96 s</td><td class="num">−26.7%</td></tr>
+    </table>
+
+    <div class="result-image">
+      <img src="assets/cycle_time_comparison.png" alt="Bar chart comparing cycle time across baseline, optimized 1, and optimized 2 scenarios">
+      <div class="caption">Cycle-time comparison across all three scenarios</div>
+    </div>
+  </section>
+
+  <!-- ===================== TECHNICAL DETAILS ===================== -->
+  <section id="technical">
+    <div class="section-num">05 — Technical Details</div>
+    <h2 class="section-title">The model behind the numbers</h2>
+
+    <div class="term-list">
+      <div class="term">
+        <div class="term-name">6-axis robotic arm</div>
+        <div class="term-def">A manipulator with six rotational joints, giving it full position and orientation control in 3D space — the standard configuration for industrial pick-and-place robots.</div>
+      </div>
+      <div class="term">
+        <div class="term-name">DH parameters</div>
+        <div class="term-def">Denavit–Hartenberg parameters describe each joint's geometry with four numbers, giving a consistent way to build the arm's full kinematic chain.</div>
+      </div>
+      <div class="term">
+        <div class="term-name">Forward kinematics</div>
+        <div class="term-def">Given six joint angles, forward kinematics computes exactly where the gripper tip sits in 3D space — the core calculation behind every frame of the simulation.</div>
+      </div>
+      <div class="term">
+        <div class="term-name">Joint angular speed</div>
+        <div class="term-def">The maximum rate at which a single joint can rotate. Raising this shortens the time it takes to complete any given move.</div>
+      </div>
+      <div class="term">
+        <div class="term-name">Gripper operation time</div>
+        <div class="term-def">The dwell time added each time the gripper opens or closes — real pneumatic grippers aren't instantaneous, so this time is added directly to the cycle.</div>
+      </div>
+      <div class="term">
+        <div class="term-name">Cycle-time calculation</div>
+        <div class="term-def">Each move's duration is set by its slowest joint; total cycle time sums every move plus gripper dwell time across the full Home → Pick → Place → Home sequence.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== SOURCE ===================== -->
+  <section id="source" class="source-section">
+    <div class="section-num">06 — Source Code</div>
+    <h2 class="section-title">Every line of this simulation is open</h2>
+    <div class="section-body">
+      <p>Forward kinematics, waypoint logic, GIF rendering, and the cycle-time model — all in four short Python files.</p>
+    </div>
+    <a href="https://github.com/agriya2006655/pick-place-robot-sim" class="btn">View Source Code → GitHub</a>
+  </section>
+
+  <footer>
+    Agriya Rajsi Sinha — Mechanical &amp; Automation Engineering, IGDTUW
+  </footer>
+
+</div>
+
+</body>
+</html>
