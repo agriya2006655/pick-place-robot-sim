@@ -118,7 +118,7 @@ def build_animation(frames, out_path="pick_and_place.gif", fps=15):
         glow_scatter(ax, f["object_pos"], COLOR_OBJECT, s=200, marker="*", layers=4,
                      zorder=6, label=obj_label)
 
-        ax.set_title(f"Pick & Place Simulation\nStep: {f['step_label']}", fontsize=11)
+        ax.set_title(f"RAPID: Pick & Place Simulation\nStep: {f['step_label']}", fontsize=11)
 
         handles, labels = ax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
