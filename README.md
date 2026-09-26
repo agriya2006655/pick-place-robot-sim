@@ -1,5 +1,10 @@
 🔗 Live demo: https://agriya2006655.github.io/pick-place-robot-sim/showcase/
+
 # RAPID: 6-Axis Robotic Pick-and-Place Simulation & Cycle-Time Optimization
+
+## Project Preview
+
+![6-Axis Robot Pick-and-Place](pick_and_place.gif)
 
 A two-part project:
 
@@ -97,7 +102,7 @@ python3 visualize.py
 python3 cycle_time.py
 ```
 
-## Extending later
+## Future Improvements
 
 - Swap the hand-picked joint waypoints for real inverse kinematics to
   specify Pick/Place in Cartesian (x, y, z) instead of joint angles.
